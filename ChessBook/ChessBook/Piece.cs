@@ -2,22 +2,27 @@
 
 class Piece
 {
-    public enum ChessPieceType
-    {
-        WhiteKing = '\u2654',
-        BlackKing = '\u265a',
-        WhiteQueen = '\u2655',
-        BlackQueen = '\u265b',
-        WhiteRook = '\u2656',
-        BlackRook = '\u265c',
-        WhiteBishop = '\u2657',
-        BlackBishop = '\u265d',
-        WhiteKnight = '\u2658',
-        BlackKnight = '\u265e',
-        WhitePawn = '\u2659',
-        BlackPawn = '\u265f'
-    }
-    
+    // private Dictionary<char, char> BlackPiece = new Dictionary<char, char>()
+    // {
+    //     {'K', '\u265a'},
+    //     {'Q', '\u265b'},
+    //     {'B', '\u265d'},
+    //     {'N', '\u265e'},
+    //     {'R', '\u265c'},
+    //     {'P', '\u265f'}
+    // };
+    //
+    // private Dictionary<char, char> WhitePiece = new Dictionary<char, char>()
+    // {
+    //     {'K', '\u2654'},
+    //     {'Q', '\u2655'},
+    //     {'B', '\u2657'},
+    //     {'N', '\u2658'},
+    //     {'R', '\u2656'},
+    //     {'P', '\u2659'}
+    // };
+    //
+
     public enum PieceType
     {
         King = 'K',
@@ -30,7 +35,7 @@ class Piece
     
     public Piece()
     {
-            
+
     }
 
     public void Set(bool black, PieceType type, int x, int y)
@@ -55,9 +60,33 @@ class Piece
 
     public char getType()
     {
+        //return isBlack ? BlackPiece[(char)pieceType] : WhitePiece[(char)pieceType];
         return (char)pieceType;
     }
-
+    
+    public static PieceType getPieceType(char type)
+    {
+        switch (type) 
+        {
+            case 'K':
+                return PieceType.King;
+            case 'Q':
+                return PieceType.Queen;
+            case 'R':
+                return PieceType.Rook;
+            case 'B':
+                return PieceType.Bishop;
+            case 'N':
+                return PieceType.Knight;
+            case 'P':
+                return PieceType.Pawn;
+            default:
+                Console.WriteLine("Never come to here!");
+                return PieceType.Pawn;
+        }
+    }
+    
+    
     internal PieceType pieceType { get; set; }
     internal int x { get; set; }
     internal int y { get; set; }
