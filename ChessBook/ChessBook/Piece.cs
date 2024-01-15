@@ -1,4 +1,4 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System.Xml;
 
 class Piece
 {
@@ -22,7 +22,12 @@ class Piece
     //     {'P', '\u2659'}
     // };
     //
+    
+    public delegate bool Movable(int to_x, int to_y, int from_x, int from_y);
 
+    public const int BLACK = 0;
+    public const int WHITE = 1;
+    
     public enum PieceType
     {
         King = 'K',
@@ -38,13 +43,14 @@ class Piece
 
     }
 
-    public void Set(bool black, PieceType type, int x, int y)
+    public void Set(int color, PieceType type, int x, int y, Func<int, int, int, int, int, bool> move)
     {
-        this.isBlack = black;
+        this.color = color;
         this.pieceType = type;
         this.x = x;
         this.y = y;
         this.isAlive = true;
+        this._movable = move;
     }
 
     public void setDead()
@@ -54,6 +60,8 @@ class Piece
 
     public void Move(int x, int y)
     {
+        var color = (this.color == 0) ? 'B' : 'W';
+        Console.WriteLine($"\n{color} {pieceType} : ({(char)(this.x + 'A')}, {this.y+1}) -> ({(char)(x + 'A')}, {y+1})\n");
         this.x = x;
         this.y = y;
     }
@@ -85,11 +93,18 @@ class Piece
                 return PieceType.Pawn;
         }
     }
-    
-    
+
+    public bool CanMove(int to_x, int to_y)
+    {
+        if (!isAlive) return false;
+        return _movable != null ? _movable(color, to_x, to_y, this.x, this.y) : false;
+    }
+
+    internal int color { get; private set; }
+
     internal PieceType pieceType { get; set; }
     internal int x { get; set; }
     internal int y { get; set; }
-    private bool isAlive;
-    private bool isBlack;
+    internal bool isAlive { get; set; }
+    private Func<int, int, int, int, int, bool> _movable;
 }
