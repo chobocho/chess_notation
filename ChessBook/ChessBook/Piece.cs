@@ -2,27 +2,6 @@
 
 class Piece
 {
-    // private Dictionary<char, char> BlackPiece = new Dictionary<char, char>()
-    // {
-    //     {'K', '\u265a'},
-    //     {'Q', '\u265b'},
-    //     {'B', '\u265d'},
-    //     {'N', '\u265e'},
-    //     {'R', '\u265c'},
-    //     {'P', '\u265f'}
-    // };
-    //
-    // private Dictionary<char, char> WhitePiece = new Dictionary<char, char>()
-    // {
-    //     {'K', '\u2654'},
-    //     {'Q', '\u2655'},
-    //     {'B', '\u2657'},
-    //     {'N', '\u2658'},
-    //     {'R', '\u2656'},
-    //     {'P', '\u2659'}
-    // };
-    //
-    
     public delegate bool Movable(int to_x, int to_y, int from_x, int from_y);
 
     public const int BLACK = 0;
@@ -102,9 +81,9 @@ class Piece
 
     internal int color { get; private set; }
 
-    internal PieceType pieceType { get; set; }
+    private PieceType pieceType { get; set; }
     internal int x { get; set; }
     internal int y { get; set; }
-    internal bool isAlive { get; set; }
+    private bool isAlive { get; set; }
     private Func<int, int, int, int, bool> _movable;
 }
