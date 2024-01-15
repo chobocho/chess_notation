@@ -11,12 +11,14 @@
 
     public bool QueenMove(int to_x, int to_y, int from_x, int from_y)
     {
-        return false;
+        return (to_y == from_y && to_x != from_x) ||
+               (to_y != from_y && to_x == from_x) || 
+               (to_y - from_y == to_x - from_x);
     }
 
     public bool BishopMove(int to_x, int to_y, int from_x, int from_y)
     {
-        return false;
+        return (to_y - from_y == to_x - from_x);
     }
 
     public bool KnightMove(int to_x, int to_y, int from_x, int from_y)
@@ -26,7 +28,8 @@
 
     public bool RookMove(int to_x, int to_y, int from_x, int from_y)
     {
-        return false;
+        return (to_y == from_y && to_x != from_x) ||
+               (to_y != from_y && to_x == from_x);
     }
 
     public bool PawnMove(int to_x, int to_y, int from_x, int from_y)

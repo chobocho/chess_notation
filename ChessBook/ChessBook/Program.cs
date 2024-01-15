@@ -37,7 +37,7 @@
         Console.WriteLine("\nN: Next / B: Back / Q,E: Exit");
 
         bool isEndGame = false;
-        while (!isEndGame)
+        while (!isEndGame && !chessBook.isEnd())
         {
             ConsoleKeyInfo key = Console.ReadKey(true);
             switch (key.Key)
@@ -65,8 +65,15 @@
         Console.WriteLine($"Exit!");
     }
 
+    private bool isEnd()
+    {
+        return index == moves.Count;
+    }
+
     private void MoveNext()
     {
+        if (index == moves.Count) return;
+        
         string move = moves[index++];
         string piece = "";
 
