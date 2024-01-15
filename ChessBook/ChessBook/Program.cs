@@ -11,10 +11,10 @@
     ChessBook()
     {
         chessBoard = new ChessBoard();
-        ParingGame();
+        ParsingGame();
     }
 
-    private void ParingGame()
+    private void ParsingGame()
     {
         string[] tokens = chessGame.Split(' ');
         foreach (string token in tokens)

@@ -43,7 +43,7 @@ class Piece
 
     }
 
-    public void Set(int color, PieceType type, int x, int y, Func<int, int, int, int, int, bool> move)
+    public void Set(int color, PieceType type, int x, int y, Func<int, int, int, int, bool> move)
     {
         this.color = color;
         this.pieceType = type;
@@ -97,7 +97,7 @@ class Piece
     public bool CanMove(int to_x, int to_y)
     {
         if (!isAlive) return false;
-        return _movable != null ? _movable(color, to_x, to_y, this.x, this.y) : false;
+        return _movable != null ? _movable(to_x, to_y, this.x, this.y) : false;
     }
 
     internal int color { get; private set; }
@@ -106,5 +106,5 @@ class Piece
     internal int x { get; set; }
     internal int y { get; set; }
     internal bool isAlive { get; set; }
-    private Func<int, int, int, int, int, bool> _movable;
+    private Func<int, int, int, int, bool> _movable;
 }
