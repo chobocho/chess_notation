@@ -1,68 +1,67 @@
-﻿
+﻿namespace ChoboChessBoard;
+
 public class ChessBoard
 {
-    private char[,] board = new char[8, 8];
+    private char[,] _board = new char[8, 8];
 
-    private Dictionary<Piece.PieceType, List<Piece>> pieceTable = new Dictionary<Piece.PieceType, List<Piece>>();
-    private List<Piece> KingList = new ();
-    private List<Piece> QueenList = new ();
-    private List<Piece> BishopList = new ();
-    private List<Piece> KnightList = new ();
-    private List<Piece> RookList = new ();
-    private List<Piece> PawnList = new ();
-    private readonly PieceMove _blackPieceMove = new BlackPieceMove();
-    private readonly PieceMove _whitePieceMove = new WhitePieceMove();
-    private int playerTurn = Piece.WHITE;
+    private Dictionary<Piece.PieceType, List<Piece>> _pieceTable = new Dictionary<Piece.PieceType, List<Piece>>();
+    private List<Piece> _KingList = new ();
+    private List<Piece> _QueenList = new ();
+    private List<Piece> _BishopList = new ();
+    private List<Piece> _KnightList = new ();
+    private List<Piece> _RookList = new ();
+    private List<Piece> _PawnList = new ();
+    private int _playerTurn = Piece.WHITE;
 
     public ChessBoard()
     {
         InitPieces();
 
-        GeneratePiece(Piece.WHITE, 0, 1, _whitePieceMove);
-        GeneratePiece(Piece.BLACK, 7, 6, _blackPieceMove);
+        GeneratePiece(Piece.WHITE, 0, 1, new WhitePieceMove(_board));
+        GeneratePiece(Piece.BLACK, 7, 6, new BlackPieceMove(_board));
 
         UpdateBoard();
     }
 
-    private void GeneratePiece(int color, int y1, int y2, PieceMove pieceMove)
+    private void GeneratePiece(int color, int y1, int y2, IPieceMove pieceMove)
     {
-        KingList.Add(PieceFactory(color, Piece.PieceType.King, 4, y1, pieceMove.KingMove));
-        QueenList.Add( PieceFactory(color, Piece.PieceType.Queen, 3, y1, pieceMove.QueenMove));
+        _KingList.Add(PieceFactory(color, Piece.PieceType.King, 4, y1, pieceMove.KingMove));
+        _QueenList.Add( PieceFactory(color, Piece.PieceType.Queen, 3, y1, pieceMove.QueenMove));
         
-        BishopList.Add(PieceFactory(color, Piece.PieceType.Bishop, 2, y1, pieceMove.BishopMove));
-        BishopList.Add(PieceFactory(color, Piece.PieceType.Bishop, 5, y1, pieceMove.BishopMove));
+        _BishopList.Add(PieceFactory(color, Piece.PieceType.Bishop, 2, y1, pieceMove.BishopMove));
+        _BishopList.Add(PieceFactory(color, Piece.PieceType.Bishop, 5, y1, pieceMove.BishopMove));
         
-        KnightList.Add(PieceFactory(color, Piece.PieceType.Knight, 1, y1, pieceMove.KnightMove));
-        KnightList.Add(PieceFactory(color, Piece.PieceType.Knight, 6, y1, pieceMove.KnightMove));
+        _KnightList.Add(PieceFactory(color, Piece.PieceType.Knight, 1, y1, pieceMove.KnightMove));
+        _KnightList.Add(PieceFactory(color, Piece.PieceType.Knight, 6, y1, pieceMove.KnightMove));
         
-        RookList.Add(PieceFactory(color, Piece.PieceType.Rook, 0, y1, pieceMove.RookMove));
-        RookList.Add(PieceFactory(color, Piece.PieceType.Rook, 7, y1, pieceMove.RookMove));
+        _RookList.Add(PieceFactory(color, Piece.PieceType.Rook, 0, y1, pieceMove.RookMove));
+        _RookList.Add(PieceFactory(color, Piece.PieceType.Rook, 7, y1, pieceMove.RookMove));
         
         for (int i = 8; i < 16; i++)
         {
-            PawnList.Add(PieceFactory(color, Piece.PieceType.Pawn, i-8, y2, pieceMove.PawnMove));
+            _PawnList.Add(PieceFactory(color, Piece.PieceType.Pawn, i-8, y2, pieceMove.PawnMove));
         }
     }
     
     private void InitPieces()
     {
-        pieceTable[Piece.PieceType.King] = KingList;
-        pieceTable[Piece.PieceType.Queen] = QueenList;
-        pieceTable[Piece.PieceType.Bishop] = BishopList;
-        pieceTable[Piece.PieceType.Knight] = KnightList;
-        pieceTable[Piece.PieceType.Rook] = RookList;
-        pieceTable[Piece.PieceType.Pawn] = PawnList;
+        _pieceTable[Piece.PieceType.King] = _KingList;
+        _pieceTable[Piece.PieceType.Queen] = _QueenList;
+        _pieceTable[Piece.PieceType.Bishop] = _BishopList;
+        _pieceTable[Piece.PieceType.Knight] = _KnightList;
+        _pieceTable[Piece.PieceType.Rook] = _RookList;
+        _pieceTable[Piece.PieceType.Pawn] = _PawnList;
     }
 
     private void UpdateBoard()
     {
         InitBoard();
-        foreach (var entry in pieceTable)
+        foreach (var entry in _pieceTable)
         {
             var pieces = entry.Value;
             foreach (var piece in pieces)
             {
-                board[piece.y, piece.x] = (piece.color == Piece.BLACK) ? 
+                _board[piece._y, piece._x] = piece._color == Piece.BLACK ? 
                     char.ToLower(piece.getType()) : piece.getType();
             }
         }
@@ -74,7 +73,7 @@ public class ChessBoard
         {
             for (var j = 0; j < 8; j++)
             {
-                board[i, j] = ' ';
+                _board[i, j] = ' ';
             }
         }
     }
@@ -103,9 +102,9 @@ public class ChessBoard
     
     private void PrintSquare(int i, int j)
     {
-        Console.ForegroundColor = char.IsLower(board[i,j]) ? ConsoleColor.Black : ConsoleColor.Red;
+        Console.ForegroundColor = char.IsLower(_board[i,j]) ? ConsoleColor.Black : ConsoleColor.Red;
         Console.BackgroundColor = ((i + j) & 0x1) == 1 ? ConsoleColor.Gray : ConsoleColor.White;
-        Console.Write($"{char.ToUpper(board[i, j])} ");
+        Console.Write($"{char.ToUpper(_board[i, j])} ");
         Console.BackgroundColor = ConsoleColor.Black;
         Console.ForegroundColor = ConsoleColor.Gray;
     }
@@ -119,7 +118,7 @@ public class ChessBoard
     public void MoveNext(string move)
     {
         var (pieceType, x, y) = ParseMove(move);
-        var selectedPiece = FindPiece(playerTurn, pieceType, x, y);
+        var selectedPiece = FindPiece(_playerTurn, pieceType, x, y);
         TogglePlayerTurn();
         
         if (selectedPiece == null)
@@ -134,7 +133,7 @@ public class ChessBoard
 
     private (Piece.PieceType, int, int) ParseMove(string move)
     {
-        var pieceType = Piece.getPieceType(move[0]);
+        var pieceType = Piece.GetPieceType(move[0]);
         var destinationColumn = move[1] - 'a';
         var destinationRow = move[2] - '1'; // assuming chess board rows start from 1
         return (pieceType, destinationColumn, destinationRow);
@@ -143,11 +142,16 @@ public class ChessBoard
     
     private void TogglePlayerTurn()
     {
-        playerTurn = 1 - playerTurn;
+        _playerTurn = 1 - _playerTurn;
+    }
+    
+    private Piece FindPiece(int color, Piece.PieceType type, int toX, int toY, int fromX, int fromY, bool isCatched)
+    {
+        return _pieceTable[type].FirstOrDefault(p => p._color == color && p.CanMove(toX, toY));
     }
     
     private Piece FindPiece(int color, Piece.PieceType type, int x, int y)
     {
-        return pieceTable[type].FirstOrDefault(p => p.color == color && p.CanMove(x, y));
+        return _pieceTable[type].FirstOrDefault(p => p._color == color && p.CanMove(x, y));
     }
 }
