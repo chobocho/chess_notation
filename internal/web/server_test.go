@@ -164,8 +164,8 @@ func TestGamePageRenders(t *testing.T) {
 		t.Fatalf("status %d", rr.Code)
 	}
 	body := rr.Body.String()
-	if !strings.Contains(body, "class=\"sq") {
-		t.Fatalf("board cells missing")
+	if !strings.Contains(body, `<canvas class="board-canvas"`) {
+		t.Fatalf("board canvas missing")
 	}
 	if !strings.Contains(body, "ply-indicator") {
 		t.Fatalf("ply indicator missing")
@@ -191,18 +191,43 @@ func TestPieceSVGsServed(t *testing.T) {
 	}
 }
 
-func TestBoardTemplateUsesImg(t *testing.T) {
+func TestFragmentReturnsPlainFEN(t *testing.T) {
 	srv, _ := newTestServer(t)
 	defer srv.Store.Close()
 	req := httptest.NewRequest(http.MethodGet, "/game/1/fragment/0", nil)
 	rr := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d", rr.Code)
+	}
+	if ct := rr.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/plain") {
+		t.Errorf("content-type = %q, want text/plain", ct)
+	}
+	body := strings.TrimSpace(rr.Body.String())
+	if strings.Contains(body, "<") {
+		t.Errorf("fragment should be plain FEN, got HTML: %q", body)
+	}
+	// Starting position FEN starts with the back-rank layout.
+	if !strings.HasPrefix(body, "rnbqkbnr/pppppppp/") {
+		t.Errorf("fragment not a start-position FEN: %q", body)
+	}
+}
+
+func TestGamePageHasCanvas(t *testing.T) {
+	srv, _ := newTestServer(t)
+	defer srv.Store.Close()
+	req := httptest.NewRequest(http.MethodGet, "/game/1", nil)
+	rr := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rr, req)
 	body := rr.Body.String()
-	// Starting position has all the pieces we expect.
-	for _, p := range []string{"wK", "wQ", "wR", "wB", "wN", "wP", "bK", "bQ", "bR", "bB", "bN", "bP"} {
-		if !strings.Contains(body, "/static/pieces/"+p+".svg") {
-			t.Errorf("fragment missing img for %s", p)
-		}
+	if !strings.Contains(body, `<canvas class="board-canvas"`) {
+		t.Errorf("game page missing canvas. body snippet:\n%s", body)
+	}
+	if !strings.Contains(body, `data-fen="rnbqkbnr/pppppppp/`) {
+		t.Errorf("canvas missing starting-position data-fen")
+	}
+	if !strings.Contains(body, `src="/static/app.js"`) {
+		t.Errorf("page missing app.js script")
 	}
 }
 
@@ -247,9 +272,14 @@ func TestGameFragment(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status %d", rr.Code)
 	}
-	body := rr.Body.String()
-	if !strings.Contains(body, "class=\"chessboard\"") {
-		t.Fatalf("fragment missing board: %s", body)
+	body := strings.TrimSpace(rr.Body.String())
+	// After 1. e4 e5 (two plies), the start-position pieces are rearranged; FEN
+	// should have 'p's on rank 5 / 'P' on rank 4 but we just assert it looks FEN-ish.
+	if strings.Contains(body, "<") {
+		t.Fatalf("fragment should be plain FEN: %q", body)
+	}
+	if len(strings.Fields(body)) < 4 {
+		t.Fatalf("fragment FEN malformed: %q", body)
 	}
 	if strings.Contains(body, "<html") {
 		t.Fatalf("fragment should not be a full page")

@@ -324,9 +324,10 @@ func (srv *Server) renderGame(w http.ResponseWriter, r *http.Request, id int64, 
 	board := buildBoardView(pos, fen)
 
 	if fragmentOnly {
-		if err := srv.boardT.ExecuteTemplate(w, "board", board); err != nil {
-			log.Printf("fragment template: %v", err)
-		}
+		// Clients redraw the canvas from FEN; return plain text so the request is cheap.
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		_, _ = w.Write([]byte(fen))
 		return
 	}
 

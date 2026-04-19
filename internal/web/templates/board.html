@@ -1,17 +1,6 @@
 {{define "board"}}
-<table class="chessboard" data-fen="{{.FEN}}">
-<tbody>
-{{range .Rows}}
-<tr>
-  {{range .Cells}}
-  <td class="sq {{.Shade}}" data-sq="{{.Name}}">
-    {{- if .Piece -}}
-    <img class="piece" src="/static/pieces/{{.Piece}}.svg" alt="{{.Piece}}" draggable="false">
-    {{- end -}}
-  </td>
-  {{end}}
-</tr>
-{{end}}
-</tbody>
-</table>
+<div class="board-wrap">
+  <canvas class="board-canvas" data-fen="{{.FEN}}" aria-label="Chess board" role="img"></canvas>
+  <noscript>JavaScript is required to render the board. The FEN is: <code>{{.FEN}}</code></noscript>
+</div>
 {{end}}

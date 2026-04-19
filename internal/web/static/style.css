@@ -5,6 +5,7 @@
   --fg: #222;
   --bg: #fafafa;
   --muted: #666;
+  --border: #ccc;
 }
 * { box-sizing: border-box; }
 body {
@@ -12,14 +13,19 @@ body {
   font-family: system-ui, -apple-system, sans-serif;
   background: var(--bg);
   color: var(--fg);
+  -webkit-text-size-adjust: 100%;
 }
 header {
-  padding: 12px 24px;
+  padding: 10px 16px;
   border-bottom: 1px solid #ddd;
+  background: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 5;
 }
-header h1 { margin: 0; font-size: 1.25rem; }
+header h1 { margin: 0; font-size: 1.15rem; }
 header h1 a { color: inherit; text-decoration: none; }
-main { padding: 16px 24px; }
+main { padding: 12px 16px 32px; }
 
 .toolbar {
   display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap;
@@ -27,8 +33,9 @@ main { padding: 16px 24px; }
 }
 .toolbar h2 { margin: 0; }
 .btn {
-  display: inline-block; padding: 6px 12px; text-decoration: none; color: inherit;
-  border: 1px solid #bbb; border-radius: 4px; background: #fff;
+  display: inline-block; padding: 8px 14px; text-decoration: none; color: inherit;
+  border: 1px solid var(--border); border-radius: 4px; background: #fff;
+  min-height: 36px;
 }
 .btn:hover { background: #eee; }
 
@@ -40,6 +47,33 @@ main { padding: 16px 24px; }
   padding: 8px 12px; margin: 0 0 12px; border-radius: 4px;
   background: #fbe3e3; border: 1px solid #e7a0a0; color: #611;
 }
+
+/* ---------- Games index ---------- */
+
+table.games { border-collapse: collapse; width: 100%; }
+table.games th, table.games td { padding: 6px 10px; text-align: left; border-bottom: 1px solid #eee; }
+table.games th { background: #f3f3f3; }
+
+form.filters {
+  display: flex; gap: 12px; align-items: end; flex-wrap: wrap;
+  margin-bottom: 12px; padding: 10px; background: #f3f3f3; border-radius: 4px;
+}
+form.filters label { display: flex; flex-direction: column; font-size: 0.85rem; color: var(--muted); }
+form.filters input, form.filters select { padding: 6px 8px; font-size: 0.95rem; min-height: 36px; }
+form.filters button, form.filters .clear {
+  padding: 8px 14px; text-decoration: none; color: inherit;
+  border: 1px solid var(--border); border-radius: 4px; background: #fff; min-height: 36px;
+}
+form.filters button:hover, form.filters .clear:hover { background: #eee; }
+
+nav.pagination { display: flex; gap: 8px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+nav.pagination a, nav.pagination .disabled {
+  text-decoration: none; color: inherit; padding: 8px 14px;
+  border: 1px solid var(--border); border-radius: 4px; background: #fff; min-height: 36px;
+}
+nav.pagination .disabled { opacity: 0.4; }
+
+/* ---------- Import page ---------- */
 
 section.import .import-form { max-width: 720px; }
 section.import label.block { display: block; margin: 12px 0; font-weight: 600; }
@@ -53,69 +87,84 @@ section.import textarea {
 section.import .or { color: var(--muted); font-style: italic; margin: 16px 0; text-align: center; }
 section.import .buttons { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
 section.import .buttons button {
-  padding: 8px 16px; border: 1px solid #345; background: #456; color: #fff; border-radius: 4px; cursor: pointer;
+  padding: 10px 18px; border: 1px solid #345; background: #456; color: #fff; border-radius: 4px; cursor: pointer;
+  min-height: 40px;
 }
 section.import .buttons button:hover { background: #567; }
 
-form.filters {
-  display: flex; gap: 12px; align-items: end; flex-wrap: wrap;
-  margin-bottom: 12px; padding: 10px; background: #f3f3f3; border-radius: 4px;
-}
-form.filters label { display: flex; flex-direction: column; font-size: 0.85rem; color: var(--muted); }
-form.filters input, form.filters select { padding: 4px 6px; font-size: 0.95rem; }
-form.filters button, form.filters .clear {
-  padding: 6px 12px; text-decoration: none; color: inherit;
-  border: 1px solid #bbb; border-radius: 4px; background: #fff;
-}
-form.filters button:hover, form.filters .clear:hover { background: #eee; }
+/* ---------- Game viewer ---------- */
 
-nav.pagination { display: flex; gap: 12px; align-items: center; margin-top: 12px; }
-nav.pagination a, nav.pagination .disabled {
-  text-decoration: none; color: inherit; padding: 4px 10px;
-  border: 1px solid #bbb; border-radius: 4px; background: #fff;
-}
-nav.pagination .disabled { opacity: 0.4; }
-
-table.games { border-collapse: collapse; width: 100%; }
-table.games th, table.games td { padding: 6px 10px; text-align: left; border-bottom: 1px solid #eee; }
-table.games th { background: #f3f3f3; }
-
-.viewer { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
-.board { flex: 0 0 auto; }
-
-table.chessboard { border-collapse: collapse; }
-table.chessboard td {
-  width: 48px; height: 48px; text-align: center; vertical-align: middle;
-  padding: 0;
-}
-table.chessboard td.light { background: var(--light); }
-table.chessboard td.dark { background: var(--dark); }
-img.piece {
-  width: 44px; height: 44px; display: block; margin: 2px auto;
-  user-select: none; -webkit-user-drag: none;
+.viewer {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
 }
 
-.side { flex: 1 1 280px; min-width: 260px; }
-.nav { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+/* Unfold / tablet: side-by-side when there is room. */
+@media (min-width: 720px) {
+  .viewer {
+    grid-template-columns: minmax(0, auto) minmax(280px, 1fr);
+  }
+}
+
+.board-wrap {
+  width: 100%;
+  max-width: min(92vmin, 560px);
+  margin: 0 auto;
+}
+
+/* Canvas sizes itself to the wrapper, stays square via aspect-ratio. JS
+ * bumps the backing store to devicePixelRatio for crisp rendering. */
+canvas.board-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: #d8c3a0;
+  border: 1px solid #8b6d4b;
+  box-shadow: 0 1px 3px rgba(0,0,0,.15);
+  touch-action: pan-y;
+}
+
+.side { min-width: 0; }
+
+.nav {
+  display: flex; gap: 6px; align-items: center; margin-bottom: 8px; flex-wrap: wrap;
+}
 .nav a {
-  text-decoration: none; padding: 4px 8px; border: 1px solid #bbb; border-radius: 4px;
-  color: inherit; background: #fff;
+  text-decoration: none; padding: 10px 14px; border: 1px solid var(--border); border-radius: 4px;
+  color: inherit; background: #fff; min-height: 40px; min-width: 44px; text-align: center;
 }
 .nav a:hover { background: #eee; }
+#ply-indicator { padding: 0 8px; font-variant-numeric: tabular-nums; }
 
-ol.moves { list-style: none; padding: 0; margin: 8px 0; columns: 2; column-gap: 16px; }
-ol.moves li { padding: 2px 4px; }
+ol.moves {
+  list-style: none; padding: 0; margin: 8px 0;
+  columns: 2; column-gap: 16px;
+  max-height: 40vh; overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+ol.moves li { padding: 4px 6px; break-inside: avoid; }
 ol.moves li.active { background: var(--active); border-radius: 3px; }
 ol.moves a { text-decoration: none; color: inherit; }
 ol.moves .num { color: var(--muted); margin-right: 4px; }
 
-.bookmark { display: flex; gap: 4px; margin-top: 12px; }
-.bookmark input[type="text"] { flex: 1; padding: 4px 8px; }
-.bookmark button { padding: 4px 10px; }
+.bookmark { display: flex; gap: 4px; margin-top: 12px; flex-wrap: wrap; }
+.bookmark input[type="text"] { flex: 1 1 180px; padding: 8px; min-height: 36px; }
+.bookmark button { padding: 8px 14px; min-height: 36px; }
 
 ul.bookmarks { padding-left: 20px; margin-top: 8px; }
 
 code.fen {
   display: block; padding: 6px 8px; background: #eee;
   font-family: ui-monospace, monospace; font-size: 0.85rem; word-break: break-all;
+}
+
+/* ---------- Galaxy Fold folded (very narrow) ---------- */
+@media (max-width: 420px) {
+  main { padding: 8px 10px 32px; }
+  table.games th:nth-child(4), table.games td:nth-child(4), /* Event */
+  table.games th:nth-child(5), table.games td:nth-child(5) { display: none; } /* Date */
+  ol.moves { columns: 1; max-height: 32vh; }
+  header h1 { font-size: 1rem; }
 }
