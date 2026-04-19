@@ -1,34 +1,7 @@
 {{define "content"}}
-<section class="import">
-  <h2>Import PGN</h2>
-  <p class="meta">Upload a <code>.pgn</code> file <em>or</em> paste PGN text below. Multi-game files are supported.</p>
-
-  {{if .Error}}
-    <p class="error">{{.Error}}{{if .Imported}} (imported {{.Imported}} before failure){{end}}</p>
-  {{end}}
-
-  <form method="post" action="/import" enctype="multipart/form-data" class="import-form">
-    <label class="block">
-      PGN file
-      <input type="file" name="pgn" accept=".pgn,text/plain,application/x-chess-pgn">
-    </label>
-
-    <p class="or">— or —</p>
-
-    <label class="block">
-      PGN text
-      <textarea name="pgn_text" rows="14" cols="72" placeholder="[Event &quot;?&quot;]
-[White &quot;...&quot;]
-[Black &quot;...&quot;]
-[Result &quot;*&quot;]
-
-1. e4 e5 2. Nf3 ...">{{.Text}}</textarea>
-    </label>
-
-    <div class="buttons">
-      <button type="submit">Import</button>
-      <a href="/" class="clear">Cancel</a>
-    </div>
-  </form>
-</section>
+<script id="page-data" type="application/json">{{.PageDataJSON}}</script>
+<form id="import-form" method="post" action="/import" enctype="multipart/form-data" style="display:none">
+  <input type="file" name="pgn" id="import-file">
+  <textarea name="pgn_text" id="import-pgn-text"></textarea>
+</form>
 {{end}}

@@ -4,6 +4,7 @@ package web
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
@@ -113,23 +114,19 @@ func (srv *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		importedN, _ = strconv.Atoi(v)
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	data := map[string]any{
-		"Title":      "Games",
-		"Games":      games,
-		"Filter":     filter,
-		"Page":       page,
-		"PrevPage":   page - 1,
-		"NextPage":   page + 1,
-		"HasPrev":    page > 1,
-		"HasNext":    page < totalPages,
-		"TotalPages": totalPages,
-		"Total":      total,
-		"PerPage":    per,
-		"QueryBase":  indexQueryBase(filter, per),
-		"Imported":   importedN,
+	gamesJ := make([]gameRowJSON, len(games))
+	for i, g := range games {
+		gamesJ[i] = gameRowJSON{ID: g.ID, White: g.White, Black: g.Black, Event: g.Event, Date: g.Date, Result: g.Result, PlyCount: g.PlyCount}
 	}
-	if err := srv.indexT.ExecuteTemplate(w, "layout", data); err != nil {
+	pd := indexPageJSON{
+		Page: "index", Imported: importedN, Total: total, Games: gamesJ,
+		Filter:     filterJSON{White: filter.White, Black: filter.Black, Result: filter.Result},
+		PageNum:    page, TotalPages: totalPages,
+		HasPrev:    page > 1, HasNext: page < totalPages,
+		PrevPage:   page - 1, NextPage: page + 1, PerPage: per,
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := srv.indexT.ExecuteTemplate(w, "layout", map[string]any{"Title": "Games", "PageDataJSON": pageJSON(pd)}); err != nil {
 		log.Printf("index template: %v", err)
 	}
 }
@@ -239,47 +236,6 @@ func (srv *Server) handleGameRoutes(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-type boardCell struct {
-	Name  string
-	Shade string
-	Glyph string
-	Color string
-	Piece string // "wK", "bP", etc. Empty means empty square.
-}
-
-type boardRow struct {
-	Cells []boardCell
-}
-
-type boardView struct {
-	Rows []boardRow
-	FEN  string
-}
-
-type moveEntry struct {
-	Number int
-	SAN    string
-	URL    string
-	Active bool
-	Ply    int
-}
-
-type gameView struct {
-	Title       string
-	Meta        *store.GameMeta
-	Ply         int
-	MaxPly      int
-	PrevPly     int
-	NextPly     int
-	Board       boardView
-	MoveEntries []moveEntry
-	Bookmarks   []store.Bookmark
-}
-
-func (v *gameView) URLAt(n int) string {
-	return fmt.Sprintf("/game/%d/ply/%d", v.Meta.ID, n)
-}
-
 func (srv *Server) renderGame(w http.ResponseWriter, r *http.Request, id int64, ply int, fragmentOnly bool) {
 	ctx := r.Context()
 	meta, err := srv.Store.GetGame(ctx, id)
@@ -316,12 +272,10 @@ func (srv *Server) renderGame(w http.ResponseWriter, r *http.Request, id int64, 
 			break
 		}
 	}
-	pos, err := chess.ParseFEN(fen)
-	if err != nil {
+	if _, err := chess.ParseFEN(fen); err != nil {
 		httpErr(w, err)
 		return
 	}
-	board := buildBoardView(pos, fen)
 
 	if fragmentOnly {
 		// Clients redraw the canvas from FEN; return plain text so the request is cheap.
@@ -333,7 +287,7 @@ func (srv *Server) renderGame(w http.ResponseWriter, r *http.Request, id int64, 
 
 	bms, _ := srv.Store.ListBookmarks(ctx, id)
 
-	entries := make([]moveEntry, 0, max)
+	movesJ := make([]moveJSON, 0, max)
 	for _, m := range moves {
 		if m.Ply == 0 {
 			continue
@@ -342,28 +296,25 @@ func (srv *Server) renderGame(w http.ResponseWriter, r *http.Request, id int64, 
 		if m.SAN.Valid {
 			san = m.SAN.String
 		}
-		entries = append(entries, moveEntry{
-			Number: (m.Ply + 1) / 2,
-			SAN:    san,
-			URL:    fmt.Sprintf("/game/%d/ply/%d", id, m.Ply),
-			Active: m.Ply == ply,
-			Ply:    m.Ply,
-		})
+		movesJ = append(movesJ, moveJSON{Ply: m.Ply, Number: (m.Ply + 1) / 2, SAN: san})
 	}
-
-	view := &gameView{
-		Title:       fmt.Sprintf("%s vs %s", meta.White, meta.Black),
-		Meta:        meta,
-		Ply:         ply,
-		MaxPly:      max,
-		PrevPly:     max0(ply - 1),
-		NextPly:     min(ply+1, max),
-		Board:       board,
-		MoveEntries: entries,
-		Bookmarks:   bms,
+	bmsJ := make([]bmJSON, len(bms))
+	for i, bm := range bms {
+		bmsJ[i] = bmJSON{Ply: bm.Ply, Note: bm.Note}
+	}
+	pd := gamePageJSON{
+		Page: "game", GameID: id,
+		White: meta.White, Black: meta.Black, Event: meta.Event, Site: meta.Site, Date: meta.Date, Result: meta.Result,
+		Ply: ply, MaxPly: max, FEN: fen,
+		Moves: movesJ, Bookmarks: bmsJ,
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := srv.gameT.ExecuteTemplate(w, "layout", view); err != nil {
+	if err := srv.gameT.ExecuteTemplate(w, "layout", map[string]any{
+		"Title":        fmt.Sprintf("%s vs %s", meta.White, meta.Black),
+		"PageDataJSON": pageJSON(pd),
+		"GameID":       id,
+		"Ply":          ply,
+	}); err != nil {
 		log.Printf("game template: %v", err)
 	}
 }
@@ -380,52 +331,6 @@ func min(a, b int) int {
 		return a
 	}
 	return b
-}
-
-func buildBoardView(pos *chess.Position, fen string) boardView {
-	rows := make([]boardRow, 0, 8)
-	for rank := 7; rank >= 0; rank-- {
-		cells := make([]boardCell, 0, 8)
-		for file := 0; file < 8; file++ {
-			sq := chess.Sq(file, rank)
-			shade := "light"
-			if (file+rank)%2 == 0 {
-				shade = "dark"
-			}
-			name := sq.String()
-			c := boardCell{Name: name, Shade: shade}
-			p := pos.Board[sq]
-			if p != chess.Empty {
-				c.Glyph = string(p.Glyph())
-				c.Piece = pieceCode(p)
-				if p.Color() == chess.White {
-					c.Color = "white"
-				} else {
-					c.Color = "black"
-				}
-			}
-			cells = append(cells, c)
-		}
-		rows = append(rows, boardRow{Cells: cells})
-	}
-	return boardView{Rows: rows, FEN: fen}
-}
-
-// pieceCode returns the two-letter image name for a piece, e.g. "wK" or "bP".
-// The empty string is returned for chess.Empty.
-func pieceCode(p chess.Piece) string {
-	if p == chess.Empty {
-		return ""
-	}
-	var prefix byte = 'w'
-	if p.Color() == chess.Black {
-		prefix = 'b'
-	}
-	letter := chess.PieceTypeLetter(p.Type())
-	if letter == 0 {
-		letter = 'P'
-	}
-	return string([]byte{prefix, letter})
 }
 
 func httpErr(w http.ResponseWriter, err error) {
@@ -454,11 +359,9 @@ func (srv *Server) handleImport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (srv *Server) renderImport(w http.ResponseWriter, v importView) {
-	if v.Title == "" {
-		v.Title = "Import PGN"
-	}
+	pd := importPageJSON{Page: "import", Error: v.Error, Text: v.Text}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := srv.importT.ExecuteTemplate(w, "layout", v); err != nil {
+	if err := srv.importT.ExecuteTemplate(w, "layout", map[string]any{"Title": "Import PGN", "PageDataJSON": pageJSON(pd)}); err != nil {
 		log.Printf("import template: %v", err)
 	}
 }
@@ -543,6 +446,79 @@ func (srv *Server) processImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/?imported="+strconv.Itoa(len(games)), http.StatusSeeOther)
+}
+
+// ── Canvas SPA: JSON page-data types ─────────────────────────────────────────
+
+type indexPageJSON struct {
+	Page       string        `json:"page"`
+	Imported   int           `json:"imported"`
+	Total      int           `json:"total"`
+	Games      []gameRowJSON `json:"games"`
+	Filter     filterJSON    `json:"filter"`
+	PageNum    int           `json:"page_num"`
+	TotalPages int           `json:"total_pages"`
+	HasPrev    bool          `json:"has_prev"`
+	HasNext    bool          `json:"has_next"`
+	PrevPage   int           `json:"prev_page"`
+	NextPage   int           `json:"next_page"`
+	PerPage    int           `json:"per_page"`
+}
+
+type gameRowJSON struct {
+	ID       int64  `json:"id"`
+	White    string `json:"white"`
+	Black    string `json:"black"`
+	Event    string `json:"event"`
+	Date     string `json:"date"`
+	Result   string `json:"result"`
+	PlyCount int    `json:"ply_count"`
+}
+
+type filterJSON struct {
+	White  string `json:"white"`
+	Black  string `json:"black"`
+	Result string `json:"result"`
+}
+
+type gamePageJSON struct {
+	Page      string     `json:"page"`
+	GameID    int64      `json:"game_id"`
+	White     string     `json:"white"`
+	Black     string     `json:"black"`
+	Event     string     `json:"event"`
+	Site      string     `json:"site"`
+	Date      string     `json:"date"`
+	Result    string     `json:"result"`
+	Ply       int        `json:"ply"`
+	MaxPly    int        `json:"max_ply"`
+	FEN       string     `json:"fen"`
+	Moves     []moveJSON `json:"moves"`
+	Bookmarks []bmJSON   `json:"bookmarks"`
+}
+
+type moveJSON struct {
+	Ply    int    `json:"ply"`
+	Number int    `json:"number"`
+	SAN    string `json:"san"`
+}
+
+type bmJSON struct {
+	Ply  int    `json:"ply"`
+	Note string `json:"note"`
+}
+
+type importPageJSON struct {
+	Page  string `json:"page"`
+	Error string `json:"error"`
+	Text  string `json:"text"`
+}
+
+// pageJSON marshals v to JSON safe for embedding in an HTML <script> tag.
+func pageJSON(v any) template.JS {
+	b, _ := json.Marshal(v)
+	s := strings.ReplaceAll(string(b), "</", `<\/`)
+	return template.JS(s)
 }
 
 // Serve runs the HTTP server until ctx is cancelled.

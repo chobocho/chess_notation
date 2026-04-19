@@ -2,17 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>{{.Title}} — chess_notation</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header>
-  <h1><a href="/">chess_notation</a></h1>
-</header>
-<main>
 {{template "content" .}}
-</main>
+<canvas id="app"></canvas>
+<input id="ovr-input" type="text" autocomplete="off" autocorrect="off" spellcheck="false">
+<textarea id="ovr-pgn" spellcheck="false"></textarea>
 <script src="/static/app.js"></script>
 </body>
 </html>{{end}}
