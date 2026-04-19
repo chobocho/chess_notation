@@ -130,7 +130,7 @@ func importFile(ctx context.Context, s *store.Store, path string) error {
 	}
 
 	// Re-split the raw text into per-game slices so each stored pgn_raw is self-contained.
-	chunks := splitPGNChunks(string(raw), len(games))
+	chunks := pgn.SplitChunks(string(raw), len(games))
 
 	for i, g := range games {
 		chunk := chunks[i]
@@ -144,65 +144,4 @@ func importFile(ctx context.Context, s *store.Store, path string) error {
 		fmt.Printf("imported game %d (%s vs %s) as id=%d\n", i+1, g.Tags["White"], g.Tags["Black"], id)
 	}
 	return nil
-}
-
-// splitPGNChunks attempts to split a multi-game PGN text by blank-line boundaries
-// before [Event ... tag blocks. Falls back to a single chunk on failure.
-func splitPGNChunks(text string, expected int) []string {
-	const sep = "\n[Event "
-	chunks := []string{}
-	idx := 0
-	for {
-		next := -1
-		if idx == 0 {
-			// First game may start at 0 or after some leading whitespace.
-			p := indexAt(text, idx, "[Event ")
-			if p < 0 {
-				break
-			}
-			idx = p
-		}
-		after := idx + 1
-		p := indexAt(text, after, sep)
-		if p < 0 {
-			next = -1
-		} else {
-			next = p + 1 // skip the leading '\n'
-		}
-		if next < 0 {
-			chunks = append(chunks, text[idx:])
-			break
-		}
-		chunks = append(chunks, text[idx:next])
-		idx = next
-	}
-	if len(chunks) != expected {
-		return make([]string, expected)
-	}
-	return chunks
-}
-
-func indexAt(s string, from int, sub string) int {
-	if from >= len(s) {
-		return -1
-	}
-	i := indexOf(s[from:], sub)
-	if i < 0 {
-		return -1
-	}
-	return from + i
-}
-
-// indexOf is a tiny substring index to avoid importing strings in this small helper.
-func indexOf(s, sub string) int {
-	n, m := len(s), len(sub)
-	if m == 0 {
-		return 0
-	}
-	for i := 0; i+m <= n; i++ {
-		if s[i:i+m] == sub {
-			return i
-		}
-	}
-	return -1
 }

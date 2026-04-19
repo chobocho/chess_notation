@@ -73,7 +73,9 @@ The default database lives at `$XDG_DATA_HOME/chess_notation/games.db`
 `/` — game list with filter form (white/black substring, result) and
 prev/next pagination. `/game/{id}` — viewer; `/game/{id}/ply/{n}` — direct
 link to a ply. Arrow keys (or `j`/`k`) step forward and backward without
-reloading.
+reloading. `/import` — upload a `.pgn` file or paste PGN text directly;
+a single-game import redirects to the new game, multi-game imports return
+to the list with a confirmation banner.
 
 The process prints a help banner on stdout and reads admin commands from
 stdin:

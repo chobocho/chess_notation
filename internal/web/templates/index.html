@@ -1,6 +1,13 @@
 {{define "content"}}
 <section class="games-index">
-  <h2>Games ({{.Total}})</h2>
+  {{if .Imported}}
+    <p class="flash">Imported {{.Imported}} game{{if ne .Imported 1}}s{{end}}.</p>
+  {{end}}
+
+  <div class="toolbar">
+    <h2>Games ({{.Total}})</h2>
+    <a class="btn" href="/import">+ Import PGN</a>
+  </div>
 
   <form method="get" class="filters">
     <label>White <input type="text" name="white" value="{{.Filter.White}}" placeholder="name"></label>
@@ -53,10 +60,7 @@
       {{end}}
     </nav>
   {{else}}
-    <p>No games match. {{if or .Filter.White .Filter.Black .Filter.Result}}Try <a href="/">clearing filters</a>.{{else}}Import a PGN:{{end}}</p>
-    {{if not (or .Filter.White .Filter.Black .Filter.Result)}}
-    <pre><code>chess_notation --import your-game.pgn</code></pre>
-    {{end}}
+    <p>No games match. {{if or .Filter.White .Filter.Black .Filter.Result}}Try <a href="/">clearing filters</a>.{{else}}<a href="/import">Import a PGN</a> to get started.{{end}}</p>
   {{end}}
 </section>
 {{end}}

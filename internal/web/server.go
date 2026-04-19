@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -14,8 +15,12 @@ import (
 	"time"
 
 	"github.com/chobocho/chess_notation/internal/chess"
+	"github.com/chobocho/chess_notation/internal/pgn"
 	"github.com/chobocho/chess_notation/internal/store"
 )
+
+// maxImportBytes caps both uploaded files and the textarea paste path.
+const maxImportBytes = 10 * 1024 * 1024 // 10 MiB
 
 //go:embed templates/*.html
 var templatesFS embed.FS
@@ -29,6 +34,7 @@ type Server struct {
 	indexT   *template.Template
 	gameT    *template.Template
 	boardT   *template.Template
+	importT  *template.Template
 }
 
 // NewServer compiles templates and returns a ready Server.
@@ -45,13 +51,18 @@ func NewServer(s *store.Store) (*Server, error) {
 	if err != nil {
 		return nil, fmt.Errorf("web: parse board template: %w", err)
 	}
-	return &Server{Store: s, indexT: idx, gameT: game, boardT: board}, nil
+	imp, err := template.ParseFS(templatesFS, "templates/layout.html", "templates/import.html")
+	if err != nil {
+		return nil, fmt.Errorf("web: parse import templates: %w", err)
+	}
+	return &Server{Store: s, indexT: idx, gameT: game, boardT: board, importT: imp}, nil
 }
 
 // Handler returns the ServeMux for the web UI.
 func (srv *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", srv.handleIndex)
+	mux.HandleFunc("/import", srv.handleImport)
 	mux.HandleFunc("/game/", srv.handleGameRoutes)
 	mux.Handle("/static/", http.FileServer(http.FS(staticFS)))
 	return mux
@@ -97,6 +108,11 @@ func (srv *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		totalPages = 1
 	}
 
+	importedN := 0
+	if v := q.Get("imported"); v != "" {
+		importedN, _ = strconv.Atoi(v)
+	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	data := map[string]any{
 		"Title":      "Games",
@@ -111,6 +127,7 @@ func (srv *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		"Total":      total,
 		"PerPage":    per,
 		"QueryBase":  indexQueryBase(filter, per),
+		"Imported":   importedN,
 	}
 	if err := srv.indexT.ExecuteTemplate(w, "layout", data); err != nil {
 		log.Printf("index template: %v", err)
@@ -412,6 +429,119 @@ func pieceCode(p chess.Piece) string {
 
 func httpErr(w http.ResponseWriter, err error) {
 	http.Error(w, err.Error(), http.StatusInternalServerError)
+}
+
+// importView drives the /import template.
+type importView struct {
+	Title    string
+	Error    string
+	Message  string
+	Text     string
+	Imported int
+}
+
+// handleImport serves the upload + paste form and processes submissions.
+func (srv *Server) handleImport(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		srv.renderImport(w, importView{Title: "Import PGN"})
+	case http.MethodPost:
+		srv.processImport(w, r)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (srv *Server) renderImport(w http.ResponseWriter, v importView) {
+	if v.Title == "" {
+		v.Title = "Import PGN"
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := srv.importT.ExecuteTemplate(w, "layout", v); err != nil {
+		log.Printf("import template: %v", err)
+	}
+}
+
+func (srv *Server) processImport(w http.ResponseWriter, r *http.Request) {
+	// Enforce an overall body cap covering both the file upload and the textarea.
+	r.Body = http.MaxBytesReader(w, r.Body, maxImportBytes)
+	if err := r.ParseMultipartForm(maxImportBytes); err != nil {
+		// Fall back to urlencoded for plain-text posts without a file.
+		if err := r.ParseForm(); err != nil {
+			srv.renderImport(w, importView{Error: "could not parse form: " + err.Error()})
+			return
+		}
+	}
+
+	raw := ""
+	// 1) File upload takes precedence.
+	if f, _, err := r.FormFile("pgn"); err == nil {
+		defer f.Close()
+		b, err := io.ReadAll(io.LimitReader(f, maxImportBytes))
+		if err != nil {
+			srv.renderImport(w, importView{Error: "read upload: " + err.Error()})
+			return
+		}
+		raw = string(b)
+	}
+	// 2) Textarea paste.
+	pasted := r.FormValue("pgn_text")
+	if raw == "" {
+		raw = pasted
+	}
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		srv.renderImport(w, importView{
+			Error: "please upload a .pgn file or paste PGN text",
+			Text:  pasted,
+		})
+		return
+	}
+
+	games, err := pgn.ParseString(raw)
+	if err != nil {
+		srv.renderImport(w, importView{
+			Error: "parse PGN: " + err.Error(),
+			Text:  pasted,
+		})
+		return
+	}
+	if len(games) == 0 {
+		srv.renderImport(w, importView{
+			Error: "no games found in the PGN",
+			Text:  pasted,
+		})
+		return
+	}
+
+	chunks := pgn.SplitChunks(raw, len(games))
+	ctx := r.Context()
+	var firstID int64
+	for i, g := range games {
+		chunk := chunks[i]
+		if chunk == "" {
+			chunk = raw
+		}
+		id, err := srv.Store.ImportGame(ctx, g, chunk)
+		if err != nil {
+			srv.renderImport(w, importView{
+				Error:    fmt.Sprintf("import game %d: %v", i+1, err),
+				Imported: i,
+				Text:     pasted,
+			})
+			return
+		}
+		if i == 0 {
+			firstID = id
+		}
+	}
+
+	// If exactly one game was imported, jump straight to it.
+	if len(games) == 1 && firstID > 0 {
+		http.Redirect(w, r, fmt.Sprintf("/game/%d", firstID), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/?imported="+strconv.Itoa(len(games)), http.StatusSeeOther)
 }
 
 // Serve runs the HTTP server until ctx is cancelled.
