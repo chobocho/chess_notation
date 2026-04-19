@@ -1,0 +1,6 @@
+/chess_notation
+/chess_notation-termux
+*.db
+*.db-shm
+*.db-wal
+.DS_Store

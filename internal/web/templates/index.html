@@ -1,0 +1,24 @@
+{{define "content"}}
+<h2>Games ({{len .Games}})</h2>
+{{if .Games}}
+<table class="games">
+  <thead><tr><th>#</th><th>White</th><th>Black</th><th>Event</th><th>Date</th><th>Result</th><th>Plies</th></tr></thead>
+  <tbody>
+  {{range .Games}}
+    <tr>
+      <td>{{.ID}}</td>
+      <td><a href="/game/{{.ID}}">{{.White}}</a></td>
+      <td>{{.Black}}</td>
+      <td>{{.Event}}</td>
+      <td>{{.Date}}</td>
+      <td>{{.Result}}</td>
+      <td>{{.PlyCount}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{else}}
+<p>No games in the database yet. Import a PGN:</p>
+<pre><code>chess_notation --import your-game.pgn</code></pre>
+{{end}}
+{{end}}

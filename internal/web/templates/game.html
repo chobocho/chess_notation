@@ -1,0 +1,51 @@
+{{define "content"}}
+<section class="game" data-game-id="{{.Meta.ID}}" data-ply="{{.Ply}}" data-max="{{.MaxPly}}">
+  <header class="game-header">
+    <h2>{{.Meta.White}} vs {{.Meta.Black}}</h2>
+    <p class="meta">{{.Meta.Event}} — {{.Meta.Site}} — {{.Meta.Date}} — Result: <strong>{{.Meta.Result}}</strong></p>
+  </header>
+
+  <div class="viewer">
+    <div id="board" class="board">
+      {{template "board" .Board}}
+    </div>
+    <div class="side">
+      <nav class="nav">
+        <a href="{{.URLAt 0}}" rel="first">⏮</a>
+        <a href="{{.URLAt .PrevPly}}" rel="prev" id="prev-link">◀</a>
+        <span id="ply-indicator">{{.Ply}} / {{.MaxPly}}</span>
+        <a href="{{.URLAt .NextPly}}" rel="next" id="next-link">▶</a>
+        <a href="{{.URLAt .MaxPly}}" rel="last">⏭</a>
+      </nav>
+
+      <ol class="moves">
+        {{range .MoveEntries}}
+          <li class="{{if .Active}}active{{end}}">
+            <span class="num">{{.Number}}.</span>
+            <a href="{{.URL}}">{{.SAN}}</a>
+          </li>
+        {{end}}
+      </ol>
+
+      <form method="post" action="/game/{{.Meta.ID}}/bookmark" class="bookmark">
+        <input type="hidden" name="ply" value="{{.Ply}}">
+        <input type="text" name="note" placeholder="Bookmark note">
+        <button type="submit">Bookmark ply {{.Ply}}</button>
+      </form>
+
+      {{if .Bookmarks}}
+      <ul class="bookmarks">
+        {{range .Bookmarks}}
+          <li><a href="{{$.URLAt .Ply}}">ply {{.Ply}}</a> — {{.Note}}</li>
+        {{end}}
+      </ul>
+      {{end}}
+
+      <details>
+        <summary>FEN</summary>
+        <code class="fen">{{.Board.FEN}}</code>
+      </details>
+    </div>
+  </div>
+</section>
+{{end}}

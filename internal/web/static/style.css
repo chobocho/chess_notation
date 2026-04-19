@@ -1,0 +1,64 @@
+:root {
+  --light: #f0d9b5;
+  --dark: #b58863;
+  --active: #f6ff99;
+  --fg: #222;
+  --bg: #fafafa;
+  --muted: #666;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+}
+header {
+  padding: 12px 24px;
+  border-bottom: 1px solid #ddd;
+}
+header h1 { margin: 0; font-size: 1.25rem; }
+header h1 a { color: inherit; text-decoration: none; }
+main { padding: 16px 24px; }
+
+table.games { border-collapse: collapse; width: 100%; }
+table.games th, table.games td { padding: 6px 10px; text-align: left; border-bottom: 1px solid #eee; }
+table.games th { background: #f3f3f3; }
+
+.viewer { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+.board { flex: 0 0 auto; }
+
+table.chessboard { border-collapse: collapse; }
+table.chessboard td {
+  width: 48px; height: 48px; text-align: center; vertical-align: middle;
+  font-size: 36px; line-height: 1; padding: 0;
+}
+table.chessboard td.light { background: var(--light); }
+table.chessboard td.dark { background: var(--dark); }
+.piece.black { color: #222; }
+.piece.white { color: #fff; text-shadow: 0 0 2px #000, 0 0 1px #000; }
+
+.side { flex: 1 1 280px; min-width: 260px; }
+.nav { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+.nav a {
+  text-decoration: none; padding: 4px 8px; border: 1px solid #bbb; border-radius: 4px;
+  color: inherit; background: #fff;
+}
+.nav a:hover { background: #eee; }
+
+ol.moves { list-style: none; padding: 0; margin: 8px 0; columns: 2; column-gap: 16px; }
+ol.moves li { padding: 2px 4px; }
+ol.moves li.active { background: var(--active); border-radius: 3px; }
+ol.moves a { text-decoration: none; color: inherit; }
+ol.moves .num { color: var(--muted); margin-right: 4px; }
+
+.bookmark { display: flex; gap: 4px; margin-top: 12px; }
+.bookmark input[type="text"] { flex: 1; padding: 4px 8px; }
+.bookmark button { padding: 4px 10px; }
+
+ul.bookmarks { padding-left: 20px; margin-top: 8px; }
+
+code.fen {
+  display: block; padding: 6px 8px; background: #eee;
+  font-family: ui-monospace, monospace; font-size: 0.85rem; word-break: break-all;
+}

@@ -1,0 +1,332 @@
+// Package web serves the SQLite game library over HTTP with server-side-rendered boards.
+package web
+
+import (
+	"context"
+	"embed"
+	"errors"
+	"fmt"
+	"html/template"
+	"log"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/chobocho/chess_notation/internal/chess"
+	"github.com/chobocho/chess_notation/internal/store"
+)
+
+//go:embed templates/*.html
+var templatesFS embed.FS
+
+//go:embed static/*
+var staticFS embed.FS
+
+// Server wraps the store and compiled templates.
+type Server struct {
+	Store    *store.Store
+	indexT   *template.Template
+	gameT    *template.Template
+	boardT   *template.Template
+}
+
+// NewServer compiles templates and returns a ready Server.
+func NewServer(s *store.Store) (*Server, error) {
+	idx, err := template.ParseFS(templatesFS, "templates/layout.html", "templates/index.html")
+	if err != nil {
+		return nil, fmt.Errorf("web: parse index templates: %w", err)
+	}
+	game, err := template.ParseFS(templatesFS, "templates/layout.html", "templates/game.html", "templates/board.html")
+	if err != nil {
+		return nil, fmt.Errorf("web: parse game templates: %w", err)
+	}
+	board, err := template.ParseFS(templatesFS, "templates/board.html")
+	if err != nil {
+		return nil, fmt.Errorf("web: parse board template: %w", err)
+	}
+	return &Server{Store: s, indexT: idx, gameT: game, boardT: board}, nil
+}
+
+// Handler returns the ServeMux for the web UI.
+func (srv *Server) Handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", srv.handleIndex)
+	mux.HandleFunc("/game/", srv.handleGameRoutes)
+	mux.Handle("/static/", http.FileServer(http.FS(staticFS)))
+	return mux
+}
+
+func (srv *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+	games, err := srv.Store.ListGames(r.Context(), 200, 0)
+	if err != nil {
+		httpErr(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	data := map[string]any{"Title": "Games", "Games": games}
+	if err := srv.indexT.ExecuteTemplate(w, "layout", data); err != nil {
+		log.Printf("index template: %v", err)
+	}
+}
+
+// /game/{id}
+// /game/{id}/ply/{n}
+// /game/{id}/fragment/{n}
+// POST /game/{id}/bookmark
+func (srv *Server) handleGameRoutes(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/game/"), "/")
+	if len(parts) == 0 || parts[0] == "" {
+		http.NotFound(w, r)
+		return
+	}
+	id, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if len(parts) == 1 {
+		srv.renderGame(w, r, id, 0, false)
+		return
+	}
+	switch parts[1] {
+	case "ply":
+		if len(parts) < 3 {
+			http.NotFound(w, r)
+			return
+		}
+		n, err := strconv.Atoi(parts[2])
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		srv.renderGame(w, r, id, n, false)
+	case "fragment":
+		if len(parts) < 3 {
+			http.NotFound(w, r)
+			return
+		}
+		n, err := strconv.Atoi(parts[2])
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		srv.renderGame(w, r, id, n, true)
+	case "bookmark":
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		ply, _ := strconv.Atoi(r.FormValue("ply"))
+		note := r.FormValue("note")
+		if _, err := srv.Store.AddBookmark(r.Context(), id, ply, note); err != nil {
+			httpErr(w, err)
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("/game/%d/ply/%d", id, ply), http.StatusSeeOther)
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+type boardCell struct {
+	Name  string
+	Shade string
+	Glyph string
+	Color string
+}
+
+type boardRow struct {
+	Cells []boardCell
+}
+
+type boardView struct {
+	Rows []boardRow
+	FEN  string
+}
+
+type moveEntry struct {
+	Number int
+	SAN    string
+	URL    string
+	Active bool
+	Ply    int
+}
+
+type gameView struct {
+	Title       string
+	Meta        *store.GameMeta
+	Ply         int
+	MaxPly      int
+	PrevPly     int
+	NextPly     int
+	Board       boardView
+	MoveEntries []moveEntry
+	Bookmarks   []store.Bookmark
+}
+
+func (v *gameView) URLAt(n int) string {
+	return fmt.Sprintf("/game/%d/ply/%d", v.Meta.ID, n)
+}
+
+func (srv *Server) renderGame(w http.ResponseWriter, r *http.Request, id int64, ply int, fragmentOnly bool) {
+	ctx := r.Context()
+	meta, err := srv.Store.GetGame(ctx, id)
+	if err != nil {
+		if errors.Is(err, chess.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		httpErr(w, err)
+		return
+	}
+	moves, err := srv.Store.GetMoves(ctx, id)
+	if err != nil {
+		httpErr(w, err)
+		return
+	}
+	max := 0
+	for _, m := range moves {
+		if m.Ply > max {
+			max = m.Ply
+		}
+	}
+	if ply < 0 {
+		ply = 0
+	}
+	if ply > max {
+		ply = max
+	}
+
+	var fen string
+	for _, m := range moves {
+		if m.Ply == ply {
+			fen = m.FENAfter
+			break
+		}
+	}
+	pos, err := chess.ParseFEN(fen)
+	if err != nil {
+		httpErr(w, err)
+		return
+	}
+	board := buildBoardView(pos, fen)
+
+	if fragmentOnly {
+		if err := srv.boardT.ExecuteTemplate(w, "board", board); err != nil {
+			log.Printf("fragment template: %v", err)
+		}
+		return
+	}
+
+	bms, _ := srv.Store.ListBookmarks(ctx, id)
+
+	entries := make([]moveEntry, 0, max)
+	for _, m := range moves {
+		if m.Ply == 0 {
+			continue
+		}
+		san := ""
+		if m.SAN.Valid {
+			san = m.SAN.String
+		}
+		entries = append(entries, moveEntry{
+			Number: (m.Ply + 1) / 2,
+			SAN:    san,
+			URL:    fmt.Sprintf("/game/%d/ply/%d", id, m.Ply),
+			Active: m.Ply == ply,
+			Ply:    m.Ply,
+		})
+	}
+
+	view := &gameView{
+		Title:       fmt.Sprintf("%s vs %s", meta.White, meta.Black),
+		Meta:        meta,
+		Ply:         ply,
+		MaxPly:      max,
+		PrevPly:     max0(ply - 1),
+		NextPly:     min(ply+1, max),
+		Board:       board,
+		MoveEntries: entries,
+		Bookmarks:   bms,
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := srv.gameT.ExecuteTemplate(w, "layout", view); err != nil {
+		log.Printf("game template: %v", err)
+	}
+}
+
+func max0(x int) int {
+	if x < 0 {
+		return 0
+	}
+	return x
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func buildBoardView(pos *chess.Position, fen string) boardView {
+	rows := make([]boardRow, 0, 8)
+	for rank := 7; rank >= 0; rank-- {
+		cells := make([]boardCell, 0, 8)
+		for file := 0; file < 8; file++ {
+			sq := chess.Sq(file, rank)
+			shade := "light"
+			if (file+rank)%2 == 0 {
+				shade = "dark"
+			}
+			name := sq.String()
+			c := boardCell{Name: name, Shade: shade}
+			p := pos.Board[sq]
+			if p != chess.Empty {
+				c.Glyph = string(p.Glyph())
+				if p.Color() == chess.White {
+					c.Color = "white"
+				} else {
+					c.Color = "black"
+				}
+			}
+			cells = append(cells, c)
+		}
+		rows = append(rows, boardRow{Cells: cells})
+	}
+	return boardView{Rows: rows, FEN: fen}
+}
+
+func httpErr(w http.ResponseWriter, err error) {
+	http.Error(w, err.Error(), http.StatusInternalServerError)
+}
+
+// Serve runs the HTTP server until ctx is cancelled.
+func (srv *Server) Serve(ctx context.Context, addr string) error {
+	hs := &http.Server{Addr: addr, Handler: srv.Handler()}
+	errCh := make(chan error, 1)
+	go func() {
+		log.Printf("chess_notation web: listening on http://%s", addr)
+		errCh <- hs.ListenAndServe()
+	}()
+	select {
+	case <-ctx.Done():
+		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return hs.Shutdown(shutCtx)
+	case err := <-errCh:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	}
+}
