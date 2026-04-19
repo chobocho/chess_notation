@@ -142,17 +142,53 @@ func (s *Store) ImportGame(ctx context.Context, g *chess.Game, rawPGN string) (i
 	return gameID, nil
 }
 
+// ListFilter narrows results from ListGamesFiltered. Zero-valued fields are ignored.
+// White and Black do substring (case-insensitive) matching; Result is exact.
+type ListFilter struct {
+	White  string
+	Black  string
+	Result string
+}
+
+// buildFilterSQL returns the WHERE clause (without the "WHERE") and the args.
+func (f ListFilter) buildFilterSQL() (string, []any) {
+	var clauses []string
+	var args []any
+	if f.White != "" {
+		clauses = append(clauses, "LOWER(white) LIKE ?")
+		args = append(args, "%"+strings.ToLower(f.White)+"%")
+	}
+	if f.Black != "" {
+		clauses = append(clauses, "LOWER(black) LIKE ?")
+		args = append(args, "%"+strings.ToLower(f.Black)+"%")
+	}
+	if f.Result != "" {
+		clauses = append(clauses, "result = ?")
+		args = append(args, f.Result)
+	}
+	return strings.Join(clauses, " AND "), args
+}
+
 // ListGames returns games ordered by ID descending, paginated.
 func (s *Store) ListGames(ctx context.Context, limit, offset int) ([]GameMeta, error) {
+	return s.ListGamesFiltered(ctx, ListFilter{}, limit, offset)
+}
+
+// ListGamesFiltered returns filtered, paginated games ordered by ID descending.
+func (s *Store) ListGamesFiltered(ctx context.Context, f ListFilter, limit, offset int) ([]GameMeta, error) {
 	if limit <= 0 {
 		limit = 50
 	}
-	rows, err := s.DB.QueryContext(ctx, `
-		SELECT id, event, site, date, round, white, black, result,
-		       white_elo, black_elo, eco, opening, ply_count, imported_at
-		  FROM games
-		 ORDER BY id DESC
-		 LIMIT ? OFFSET ?`, limit, offset)
+	q := `SELECT id, event, site, date, round, white, black, result,
+	             white_elo, black_elo, eco, opening, ply_count, imported_at
+	        FROM games`
+	where, args := f.buildFilterSQL()
+	if where != "" {
+		q += " WHERE " + where
+	}
+	q += " ORDER BY id DESC LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
+	rows, err := s.DB.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -173,6 +209,20 @@ func (s *Store) ListGames(ctx context.Context, limit, offset int) ([]GameMeta, e
 		out = append(out, m)
 	}
 	return out, rows.Err()
+}
+
+// CountGames returns the total row count matching f.
+func (s *Store) CountGames(ctx context.Context, f ListFilter) (int, error) {
+	q := `SELECT COUNT(*) FROM games`
+	where, args := f.buildFilterSQL()
+	if where != "" {
+		q += " WHERE " + where
+	}
+	var n int
+	if err := s.DB.QueryRowContext(ctx, q, args...).Scan(&n); err != nil {
+		return 0, err
+	}
+	return n, nil
 }
 
 // GetGame fetches metadata for a single game.

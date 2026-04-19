@@ -21,6 +21,25 @@ header h1 { margin: 0; font-size: 1.25rem; }
 header h1 a { color: inherit; text-decoration: none; }
 main { padding: 16px 24px; }
 
+form.filters {
+  display: flex; gap: 12px; align-items: end; flex-wrap: wrap;
+  margin-bottom: 12px; padding: 10px; background: #f3f3f3; border-radius: 4px;
+}
+form.filters label { display: flex; flex-direction: column; font-size: 0.85rem; color: var(--muted); }
+form.filters input, form.filters select { padding: 4px 6px; font-size: 0.95rem; }
+form.filters button, form.filters .clear {
+  padding: 6px 12px; text-decoration: none; color: inherit;
+  border: 1px solid #bbb; border-radius: 4px; background: #fff;
+}
+form.filters button:hover, form.filters .clear:hover { background: #eee; }
+
+nav.pagination { display: flex; gap: 12px; align-items: center; margin-top: 12px; }
+nav.pagination a, nav.pagination .disabled {
+  text-decoration: none; color: inherit; padding: 4px 10px;
+  border: 1px solid #bbb; border-radius: 4px; background: #fff;
+}
+nav.pagination .disabled { opacity: 0.4; }
+
 table.games { border-collapse: collapse; width: 100%; }
 table.games th, table.games td { padding: 6px 10px; text-align: left; border-bottom: 1px solid #eee; }
 table.games th { background: #f3f3f3; }

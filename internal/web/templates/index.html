@@ -1,24 +1,62 @@
 {{define "content"}}
-<h2>Games ({{len .Games}})</h2>
-{{if .Games}}
-<table class="games">
-  <thead><tr><th>#</th><th>White</th><th>Black</th><th>Event</th><th>Date</th><th>Result</th><th>Plies</th></tr></thead>
-  <tbody>
-  {{range .Games}}
-    <tr>
-      <td>{{.ID}}</td>
-      <td><a href="/game/{{.ID}}">{{.White}}</a></td>
-      <td>{{.Black}}</td>
-      <td>{{.Event}}</td>
-      <td>{{.Date}}</td>
-      <td>{{.Result}}</td>
-      <td>{{.PlyCount}}</td>
-    </tr>
+<section class="games-index">
+  <h2>Games ({{.Total}})</h2>
+
+  <form method="get" class="filters">
+    <label>White <input type="text" name="white" value="{{.Filter.White}}" placeholder="name"></label>
+    <label>Black <input type="text" name="black" value="{{.Filter.Black}}" placeholder="name"></label>
+    <label>Result
+      <select name="result">
+        <option value=""{{if eq .Filter.Result ""}} selected{{end}}>(any)</option>
+        <option value="1-0"{{if eq .Filter.Result "1-0"}} selected{{end}}>1-0</option>
+        <option value="0-1"{{if eq .Filter.Result "0-1"}} selected{{end}}>0-1</option>
+        <option value="1/2-1/2"{{if eq .Filter.Result "1/2-1/2"}} selected{{end}}>1/2-1/2</option>
+        <option value="*"{{if eq .Filter.Result "*"}} selected{{end}}>*</option>
+      </select>
+    </label>
+    <label>Per page
+      <input type="number" name="per" value="{{.PerPage}}" min="1" max="200" style="width:5em">
+    </label>
+    <button type="submit">Filter</button>
+    <a href="/" class="clear">Clear</a>
+  </form>
+
+  {{if .Games}}
+    <table class="games">
+      <thead><tr><th>#</th><th>White</th><th>Black</th><th>Event</th><th>Date</th><th>Result</th><th>Plies</th></tr></thead>
+      <tbody>
+      {{range .Games}}
+        <tr>
+          <td>{{.ID}}</td>
+          <td><a href="/game/{{.ID}}">{{.White}}</a></td>
+          <td>{{.Black}}</td>
+          <td>{{.Event}}</td>
+          <td>{{.Date}}</td>
+          <td>{{.Result}}</td>
+          <td>{{.PlyCount}}</td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+
+    <nav class="pagination">
+      {{if .HasPrev}}
+        <a href="?{{.QueryBase}}{{if .QueryBase}}&{{end}}page={{.PrevPage}}" rel="prev">◀ Prev</a>
+      {{else}}
+        <span class="disabled">◀ Prev</span>
+      {{end}}
+      <span>Page {{.Page}} / {{.TotalPages}}</span>
+      {{if .HasNext}}
+        <a href="?{{.QueryBase}}{{if .QueryBase}}&{{end}}page={{.NextPage}}" rel="next">Next ▶</a>
+      {{else}}
+        <span class="disabled">Next ▶</span>
+      {{end}}
+    </nav>
+  {{else}}
+    <p>No games match. {{if or .Filter.White .Filter.Black .Filter.Result}}Try <a href="/">clearing filters</a>.{{else}}Import a PGN:{{end}}</p>
+    {{if not (or .Filter.White .Filter.Black .Filter.Result)}}
+    <pre><code>chess_notation --import your-game.pgn</code></pre>
+    {{end}}
   {{end}}
-  </tbody>
-</table>
-{{else}}
-<p>No games in the database yet. Import a PGN:</p>
-<pre><code>chess_notation --import your-game.pgn</code></pre>
-{{end}}
+</section>
 {{end}}

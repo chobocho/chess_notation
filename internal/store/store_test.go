@@ -104,3 +104,141 @@ func TestGetFENAt(t *testing.T) {
 		t.Fatalf("empty fen")
 	}
 }
+
+const sampleAlt = `[Event "Alt"]
+[Site "?"]
+[White "Carol"]
+[Black "Dan"]
+[Result "0-1"]
+
+1. d4 d5 2. c4 e6 0-1
+`
+
+const sampleDraw = `[Event "Draw"]
+[Site "?"]
+[White "Alice"]
+[Black "Carol"]
+[Result "1/2-1/2"]
+
+1. e4 c5 1/2-1/2
+`
+
+func importAll(t *testing.T, s *Store) {
+	t.Helper()
+	ctx := context.Background()
+	for _, raw := range []string{sample, sampleAlt, sampleDraw} {
+		gs, err := pgn.ParseString(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.ImportGame(ctx, gs[0], raw); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestListGamesFiltered(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "f.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	importAll(t, s)
+	ctx := context.Background()
+
+	// White filter (case-insensitive substring).
+	got, err := s.ListGamesFiltered(ctx, ListFilter{White: "alice"}, 50, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("white=alice: %d rows, want 2", len(got))
+	}
+
+	// Result filter (exact).
+	got, err = s.ListGamesFiltered(ctx, ListFilter{Result: "1/2-1/2"}, 50, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Result != "1/2-1/2" {
+		t.Fatalf("result filter: %+v", got)
+	}
+
+	// Combined White+Result, no match.
+	got, err = s.ListGamesFiltered(ctx, ListFilter{White: "alice", Result: "0-1"}, 50, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("combined no-match: %+v", got)
+	}
+
+	// Black filter.
+	got, err = s.ListGamesFiltered(ctx, ListFilter{Black: "Dan"}, 50, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Black != "Dan" {
+		t.Fatalf("black=Dan: %+v", got)
+	}
+}
+
+func TestCountGames(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "c.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	importAll(t, s)
+	ctx := context.Background()
+
+	n, err := s.CountGames(ctx, ListFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 3 {
+		t.Fatalf("total = %d", n)
+	}
+	n, err = s.CountGames(ctx, ListFilter{White: "alice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 2 {
+		t.Fatalf("white=alice count = %d", n)
+	}
+	n, err = s.CountGames(ctx, ListFilter{Result: "unknown"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("no-match count = %d", n)
+	}
+}
+
+func TestPagination(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "p.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	importAll(t, s)
+	ctx := context.Background()
+
+	page1, err := s.ListGames(ctx, 2, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page1) != 2 {
+		t.Fatalf("page1 = %d", len(page1))
+	}
+	page2, err := s.ListGames(ctx, 2, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page2) != 1 {
+		t.Fatalf("page2 = %d", len(page2))
+	}
+	if page1[0].ID == page2[0].ID {
+		t.Fatalf("pages overlap")
+	}
+}

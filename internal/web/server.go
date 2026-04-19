@@ -57,21 +57,106 @@ func (srv *Server) Handler() http.Handler {
 	return mux
 }
 
+// defaultPerPage is the default number of rows on /.
+const defaultPerPage = 50
+
 func (srv *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
 		return
 	}
-	games, err := srv.Store.ListGames(r.Context(), 200, 0)
+	q := r.URL.Query()
+	filter := store.ListFilter{
+		White:  strings.TrimSpace(q.Get("white")),
+		Black:  strings.TrimSpace(q.Get("black")),
+		Result: strings.TrimSpace(q.Get("result")),
+	}
+	page, _ := strconv.Atoi(q.Get("page"))
+	if page < 1 {
+		page = 1
+	}
+	per, _ := strconv.Atoi(q.Get("per"))
+	if per <= 0 || per > 200 {
+		per = defaultPerPage
+	}
+	offset := (page - 1) * per
+
+	total, err := srv.Store.CountGames(r.Context(), filter)
 	if err != nil {
 		httpErr(w, err)
 		return
 	}
+	games, err := srv.Store.ListGamesFiltered(r.Context(), filter, per, offset)
+	if err != nil {
+		httpErr(w, err)
+		return
+	}
+
+	totalPages := (total + per - 1) / per
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	data := map[string]any{"Title": "Games", "Games": games}
+	data := map[string]any{
+		"Title":      "Games",
+		"Games":      games,
+		"Filter":     filter,
+		"Page":       page,
+		"PrevPage":   page - 1,
+		"NextPage":   page + 1,
+		"HasPrev":    page > 1,
+		"HasNext":    page < totalPages,
+		"TotalPages": totalPages,
+		"Total":      total,
+		"PerPage":    per,
+		"QueryBase":  indexQueryBase(filter, per),
+	}
 	if err := srv.indexT.ExecuteTemplate(w, "layout", data); err != nil {
 		log.Printf("index template: %v", err)
 	}
+}
+
+// indexQueryBase returns a query string (no leading "?") encoding the filter and per-page,
+// ready to have "&page=N" appended.
+func indexQueryBase(f store.ListFilter, per int) string {
+	v := make([]string, 0, 4)
+	add := func(k, s string) {
+		if s == "" {
+			return
+		}
+		v = append(v, k+"="+urlEscape(s))
+	}
+	add("white", f.White)
+	add("black", f.Black)
+	add("result", f.Result)
+	if per != defaultPerPage {
+		v = append(v, "per="+strconv.Itoa(per))
+	}
+	return strings.Join(v, "&")
+}
+
+// urlEscape is a tiny replacement for url.QueryEscape so we don't pull net/url here just for it.
+func urlEscape(s string) string { return queryEscape(s) }
+
+func queryEscape(s string) string {
+	const hex = "0123456789ABCDEF"
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'),
+			c == '-', c == '_', c == '.', c == '~':
+			b.WriteByte(c)
+		case c == ' ':
+			b.WriteByte('+')
+		default:
+			b.WriteByte('%')
+			b.WriteByte(hex[c>>4])
+			b.WriteByte(hex[c&0xF])
+		}
+	}
+	return b.String()
 }
 
 // /game/{id}
