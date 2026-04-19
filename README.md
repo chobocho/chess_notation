@@ -70,8 +70,20 @@ The default database lives at `$XDG_DATA_HOME/chess_notation/games.db`
 
 ### Web UI
 
-`/` — game list. `/game/{id}` — viewer; `/game/{id}/ply/{n}` — direct link to
-a ply. Arrow keys (or `j`/`k`) step forward and backward without reloading.
+`/` — game list with filter form (white/black substring, result) and
+prev/next pagination. `/game/{id}` — viewer; `/game/{id}/ply/{n}` — direct
+link to a ply. Arrow keys (or `j`/`k`) step forward and backward without
+reloading.
+
+The process prints a help banner on stdout and reads admin commands from
+stdin:
+
+| Command | Action |
+| --- | --- |
+| `help`, `?`, `h` | print the command help |
+| `exit`, `quit`, `q` | gracefully shut down the server |
+
+`Ctrl-C` / `SIGTERM` also shuts the server down.
 
 ## Layout
 

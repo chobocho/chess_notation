@@ -72,7 +72,10 @@ func run(ctx context.Context, webMode bool, port int, importPath, pgnPath, dbPat
 			return err
 		}
 		addr := net.JoinHostPort("", strconv.Itoa(port))
-		return srv.Serve(ctx, addr)
+		webCtx, webCancel := context.WithCancel(ctx)
+		defer webCancel()
+		go web.RunConsole(webCtx, os.Stdin, os.Stdout, webCancel)
+		return srv.Serve(webCtx, addr)
 	}
 
 	return cli.Run(ctx, s, nil, 0)
