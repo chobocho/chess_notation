@@ -215,6 +215,137 @@ func TestCountGames(t *testing.T) {
 	}
 }
 
+func TestSchemaVersionOnFresh(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "m.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	v, err := s.SchemaVersion()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v != 1 {
+		t.Fatalf("version = %d, want 1", v)
+	}
+	// schema_migrations has exactly one row.
+	var n int
+	if err := s.DB.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("schema_migrations rows = %d, want 1", n)
+	}
+	var name string
+	if err := s.DB.QueryRow(`SELECT name FROM schema_migrations WHERE version = 1`).Scan(&name); err != nil {
+		t.Fatal(err)
+	}
+	if name != "initial" {
+		t.Fatalf("name = %q", name)
+	}
+}
+
+func TestSchemaReopenIsIdempotent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "r.db")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Write some data so we can confirm it survives reopen.
+	importAll(t, s)
+	s.Close()
+
+	s2, err := Open(path)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer s2.Close()
+
+	v, err := s2.SchemaVersion()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v != 1 {
+		t.Fatalf("after reopen version = %d", v)
+	}
+	var rows int
+	if err := s2.DB.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if rows != 1 {
+		t.Fatalf("reopen duplicated schema_migrations rows: %d", rows)
+	}
+	n, err := s2.CountGames(context.Background(), ListFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 3 {
+		t.Fatalf("games after reopen = %d, want 3", n)
+	}
+}
+
+func TestSchemaAppliesV2Migration(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "v2.db")
+	// Open with just the baseline to seed the DB.
+	s, err := openWithMigrations(path, migrations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+
+	// Reopen with an extra v2 migration that adds a new column.
+	extra := append([]migration{}, migrations...)
+	extra = append(extra, migration{
+		Version: 2,
+		Name:    "add_games_notes",
+		SQL:     `ALTER TABLE games ADD COLUMN notes TEXT`,
+	})
+	s2, err := openWithMigrations(path, extra)
+	if err != nil {
+		t.Fatalf("apply v2: %v", err)
+	}
+	defer s2.Close()
+
+	v, err := s2.SchemaVersion()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v != 2 {
+		t.Fatalf("version after v2 = %d", v)
+	}
+
+	// Third reopen is a no-op.
+	s2.Close()
+	s3, err := openWithMigrations(path, extra)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s3.Close()
+	var rows int
+	if err := s3.DB.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if rows != 2 {
+		t.Fatalf("re-reopen rows = %d, want 2", rows)
+	}
+
+	// New column should be queryable.
+	if _, err := s3.DB.Exec(`UPDATE games SET notes = 'hello' WHERE id = 1`); err != nil {
+		t.Fatalf("update notes: %v", err)
+	}
+}
+
+func TestSchemaRejectsOutOfOrderMigrations(t *testing.T) {
+	bad := []migration{
+		{Version: 2, Name: "b", SQL: `SELECT 1`},
+		{Version: 1, Name: "a", SQL: `SELECT 1`},
+	}
+	_, err := openWithMigrations(filepath.Join(t.TempDir(), "bad.db"), bad)
+	if err == nil {
+		t.Fatalf("expected error on out-of-order migrations")
+	}
+}
+
 func TestPagination(t *testing.T) {
 	s, err := Open(filepath.Join(t.TempDir(), "p.db"))
 	if err != nil {

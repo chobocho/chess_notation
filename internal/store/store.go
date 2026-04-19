@@ -18,14 +18,33 @@ import (
 //go:embed schema.sql
 var schemaSQL string
 
+// migration is a single numbered schema migration.
+type migration struct {
+	Version int
+	Name    string
+	SQL     string
+}
+
+// migrations is the ordered list of schema migrations. Never reorder; only
+// append new entries with strictly increasing versions.
+var migrations = []migration{
+	{Version: 1, Name: "initial", SQL: schemaSQL},
+}
+
 // Store wraps a sql.DB and exposes typed methods.
 type Store struct {
 	DB *sql.DB
 }
 
-// Open opens (or creates) the SQLite database at path and applies the schema.
-// Pass ":memory:" for an ephemeral DB.
+// Open opens (or creates) the SQLite database at path and applies any
+// outstanding migrations. Pass ":memory:" for an ephemeral DB.
 func Open(path string) (*Store, error) {
+	return openWithMigrations(path, migrations)
+}
+
+// openWithMigrations is the test-friendly variant that allows overriding the
+// migration list (for example to verify a v2 migration applies).
+func openWithMigrations(path string, mm []migration) (*Store, error) {
 	dsn := path + "?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)"
 	if path == ":memory:" {
 		dsn = ":memory:?_pragma=foreign_keys(1)"
@@ -35,11 +54,68 @@ func Open(path string) (*Store, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1) // sqlite single-writer
-	if _, err := db.Exec(schemaSQL); err != nil {
+	if err := applyMigrations(db, mm); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("store: apply schema: %w", err)
+		return nil, err
 	}
 	return &Store{DB: db}, nil
+}
+
+// applyMigrations ensures the schema_migrations table exists and runs any
+// entries in mm whose version is greater than the stored maximum. Each
+// migration runs inside a transaction together with its bookkeeping insert.
+func applyMigrations(db *sql.DB, mm []migration) error {
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
+		version    INTEGER PRIMARY KEY,
+		name       TEXT NOT NULL,
+		applied_at INTEGER NOT NULL
+	)`); err != nil {
+		return fmt.Errorf("store: ensure schema_migrations: %w", err)
+	}
+
+	var current int
+	if err := db.QueryRow(`SELECT COALESCE(MAX(version), 0) FROM schema_migrations`).Scan(&current); err != nil {
+		return fmt.Errorf("store: read schema version: %w", err)
+	}
+
+	// Validate monotonic ordering.
+	for i := 1; i < len(mm); i++ {
+		if mm[i].Version <= mm[i-1].Version {
+			return fmt.Errorf("store: migrations out of order: %d after %d", mm[i].Version, mm[i-1].Version)
+		}
+	}
+
+	for _, m := range mm {
+		if m.Version <= current {
+			continue
+		}
+		tx, err := db.Begin()
+		if err != nil {
+			return fmt.Errorf("store: migration %d begin: %w", m.Version, err)
+		}
+		if _, err := tx.Exec(m.SQL); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("store: migration %d exec: %w", m.Version, err)
+		}
+		if _, err := tx.Exec(
+			`INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)`,
+			m.Version, m.Name, time.Now().Unix(),
+		); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("store: migration %d record: %w", m.Version, err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("store: migration %d commit: %w", m.Version, err)
+		}
+	}
+	return nil
+}
+
+// SchemaVersion returns the latest applied migration version.
+func (s *Store) SchemaVersion() (int, error) {
+	var n int
+	err := s.DB.QueryRow(`SELECT COALESCE(MAX(version), 0) FROM schema_migrations`).Scan(&n)
+	return n, err
 }
 
 // Close closes the underlying DB.
