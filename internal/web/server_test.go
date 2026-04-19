@@ -8,9 +8,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/chobocho/chess_notation/internal/chess"
 	"github.com/chobocho/chess_notation/internal/pgn"
 	"github.com/chobocho/chess_notation/internal/store"
 )
+
+func parseFENForTest(t *testing.T, fen string) (*chess.Position, error) {
+	t.Helper()
+	return chess.ParseFEN(fen)
+}
 
 const sampleA = `[Event "A"]
 [White "Alice"]
@@ -163,6 +169,72 @@ func TestGamePageRenders(t *testing.T) {
 	}
 	if !strings.Contains(body, "ply-indicator") {
 		t.Fatalf("ply indicator missing")
+	}
+}
+
+func TestPieceSVGsServed(t *testing.T) {
+	srv, _ := newTestServer(t)
+	defer srv.Store.Close()
+	pieces := []string{"wK", "wQ", "wR", "wB", "wN", "wP", "bK", "bQ", "bR", "bB", "bN", "bP"}
+	for _, p := range pieces {
+		req := httptest.NewRequest(http.MethodGet, "/static/pieces/"+p+".svg", nil)
+		rr := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Errorf("%s: status %d", p, rr.Code)
+			continue
+		}
+		body := rr.Body.String()
+		if !strings.Contains(body, "<svg") {
+			t.Errorf("%s: body missing <svg>: %q", p, body[:min(80, len(body))])
+		}
+	}
+}
+
+func TestBoardTemplateUsesImg(t *testing.T) {
+	srv, _ := newTestServer(t)
+	defer srv.Store.Close()
+	req := httptest.NewRequest(http.MethodGet, "/game/1/fragment/0", nil)
+	rr := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rr, req)
+	body := rr.Body.String()
+	// Starting position has all the pieces we expect.
+	for _, p := range []string{"wK", "wQ", "wR", "wB", "wN", "wP", "bK", "bQ", "bR", "bB", "bN", "bP"} {
+		if !strings.Contains(body, "/static/pieces/"+p+".svg") {
+			t.Errorf("fragment missing img for %s", p)
+		}
+	}
+}
+
+func TestPieceCodeMapping(t *testing.T) {
+	cases := []struct {
+		piece string
+		want  string
+	}{
+		{"wK", "wK"}, {"wQ", "wQ"}, {"wR", "wR"},
+		{"wB", "wB"}, {"wN", "wN"}, {"wP", "wP"},
+		{"bK", "bK"}, {"bQ", "bQ"}, {"bR", "bR"},
+		{"bB", "bB"}, {"bN", "bN"}, {"bP", "bP"},
+	}
+	// Parse the start position and collect codes we've seen.
+	startFEN := "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+	pos, err := parseFENForTest(t, startFEN)
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := buildBoardView(pos, startFEN)
+	seen := map[string]bool{}
+	for _, row := range view.Rows {
+		for _, cell := range row.Cells {
+			if cell.Piece != "" {
+				seen[cell.Piece] = true
+			}
+		}
+	}
+	for _, c := range cases {
+		if !seen[c.want] {
+			t.Errorf("start position missing code %s", c.want)
+		}
 	}
 }
 

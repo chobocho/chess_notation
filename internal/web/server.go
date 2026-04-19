@@ -227,6 +227,7 @@ type boardCell struct {
 	Shade string
 	Glyph string
 	Color string
+	Piece string // "wK", "bP", etc. Empty means empty square.
 }
 
 type boardRow struct {
@@ -378,6 +379,7 @@ func buildBoardView(pos *chess.Position, fen string) boardView {
 			p := pos.Board[sq]
 			if p != chess.Empty {
 				c.Glyph = string(p.Glyph())
+				c.Piece = pieceCode(p)
 				if p.Color() == chess.White {
 					c.Color = "white"
 				} else {
@@ -389,6 +391,23 @@ func buildBoardView(pos *chess.Position, fen string) boardView {
 		rows = append(rows, boardRow{Cells: cells})
 	}
 	return boardView{Rows: rows, FEN: fen}
+}
+
+// pieceCode returns the two-letter image name for a piece, e.g. "wK" or "bP".
+// The empty string is returned for chess.Empty.
+func pieceCode(p chess.Piece) string {
+	if p == chess.Empty {
+		return ""
+	}
+	var prefix byte = 'w'
+	if p.Color() == chess.Black {
+		prefix = 'b'
+	}
+	letter := chess.PieceTypeLetter(p.Type())
+	if letter == 0 {
+		letter = 'P'
+	}
+	return string([]byte{prefix, letter})
 }
 
 func httpErr(w http.ResponseWriter, err error) {

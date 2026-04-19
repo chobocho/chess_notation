@@ -50,12 +50,14 @@ table.games th { background: #f3f3f3; }
 table.chessboard { border-collapse: collapse; }
 table.chessboard td {
   width: 48px; height: 48px; text-align: center; vertical-align: middle;
-  font-size: 36px; line-height: 1; padding: 0;
+  padding: 0;
 }
 table.chessboard td.light { background: var(--light); }
 table.chessboard td.dark { background: var(--dark); }
-.piece.black { color: #222; }
-.piece.white { color: #fff; text-shadow: 0 0 2px #000, 0 0 1px #000; }
+img.piece {
+  width: 44px; height: 44px; display: block; margin: 2px auto;
+  user-select: none; -webkit-user-drag: none;
+}
 
 .side { flex: 1 1 280px; min-width: 260px; }
 .nav { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }

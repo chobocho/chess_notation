@@ -4,7 +4,11 @@
 {{range .Rows}}
 <tr>
   {{range .Cells}}
-  <td class="sq {{.Shade}}" data-sq="{{.Name}}">{{if .Glyph}}<span class="piece {{.Color}}">{{.Glyph}}</span>{{end}}</td>
+  <td class="sq {{.Shade}}" data-sq="{{.Name}}">
+    {{- if .Piece -}}
+    <img class="piece" src="/static/pieces/{{.Piece}}.svg" alt="{{.Piece}}" draggable="false">
+    {{- end -}}
+  </td>
   {{end}}
 </tr>
 {{end}}
