@@ -3,8 +3,7 @@
 A small chess PGN viewer written in Go. Stores a game library in SQLite, steps
 through moves in the terminal with an ANSI board, or serves a minimal web UI.
 
-Originally a half-finished C# console app (preserved under `legacy-csharp/`);
-this repository is the Go rewrite.
+Originally a half-finished C# console app; this repository is the Go rewrite.
 
 ## Features
 
@@ -84,7 +83,6 @@ internal/store/               SQLite schema + CRUD (modernc.org/sqlite)
 internal/cli/                 ANSI board renderer + key loop
 internal/web/                 net/http server + embedded templates/static
 testdata/                     sample PGN used by tests and docs
-legacy-csharp/                original C# prototype (reference only)
 ```
 
 ## Tests
